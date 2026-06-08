@@ -1,0 +1,1 @@
+Replace the Mapbox access code in the html file with the new public access code url
