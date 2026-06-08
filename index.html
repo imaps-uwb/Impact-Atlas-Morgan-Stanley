@@ -1,0 +1,1466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>UWBe Impact Atlas – Climate Action : One Billion Drops</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+
+  <!-- Mapbox GL JS -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.css" rel="stylesheet"/>
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.js"></script>
+  <!-- Turf.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+  <!-- PapaParse -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <!-- 1) Load Palanquin once in <head> -->
+  <link href="https://fonts.googleapis.com/css2?family=Palanquin:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root { --header-h: 64px; --vh: 100vh; }
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+
+    :root{
+    --ui-font: "Palanquin", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+    html, body { font-family: var(--ui-font); }
+
+    .mapboxgl-ctrl, .mapboxgl-ctrl * {
+      font-family: var(--ui-font) !important;
+    }
+
+    .mapboxgl-popup * { font-family: "Palanquin"; }
+  
+    .header-panel {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+      display: flex; justify-content: space-between; align-items: center;  height: var(--header-h);
+      background: #fff; padding: 10px 30px; border-bottom: 2px solid #eee; box-sizing: border-box;
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
+      font-family: 'Antonio Bold'; font-size: 16px;
+    }
+    .header-panel .logo img { height: 52px; }
+    .header-panel .title { text-align: center; flex: 1; }
+    .header-panel .title h1 { margin: 0; font-size: 22px; color: #1a3dab; }
+    .header-panel .title h2 { margin: 0; font-size: 18px; color: #e63323; }
+    .header-panel .menu a { text-decoration: none; color: #444; font-weight: 700; font-size: 16px; }
+
+    #map {
+      position: fixed;
+      top: var(--header-h);
+      left: 0;
+      right: 0;
+      bottom: 0;
+      margin: 0;              /* remove the old margin-top */
+      height: auto;           /* not needed when fixed */
+    }
+  
+    /* Filters card (top-left) */
+    #controls {
+      position: absolute; top: calc(var(--header-h)); left: 12px;
+      width: 300px; z-index: 900; background: #fff; border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.15); padding: 14px;
+      font-family: Palanquin; font-size: 14px;
+    }
+    #controls label { display:block; font-weight:700; margin: 6px 0 4px; font-size: 14px; }
+    #controls select { width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 14px; }
+    .muted { color:#6b7280; font-size:12px; }
+    .row { display: grid; gap: 8px; margin-top: 8px; }
+    .error { background:#fee2e2; border:1px solid #fca5a5; color:#7f1d1d; padding:10px; border-radius:8px; font-size:13px; display:none; margin-top:8px; }
+    #controls select {
+        font-family: "Palanquin", sans-serif !important;
+        font-weight: 400;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        background-color: #fff;
+        line-height: 1.3;
+        padding-right: 28px;
+    }
+    
+    /* Make Legend use the same UI font as Filters */
+      #legend,
+      #legend .legend-summary,
+      #legend #legendBody,
+      #legend .legend-item {
+        font-family: Palanquin;
+        font-size: 13px; /* matches #controls */
+      }
+
+      /* Optional: ensure details doesn’t override it */
+      #legend details {
+        background: transparent;
+        border: none;
+        padding: 0;
+        margin: 0;
+      }
+
+      /* Match the Filters summary header look */
+      .legend-summary{
+        cursor:pointer;
+        font-weight:700;
+        margin-bottom:8px;         /* matches your Filters header spacing */
+        font-family:"Palanquin", sans-serif;  /* keeps fonts consistent */
+      }
+
+      /* Show/hide body on open/close */
+      #legend details[open] .legend-body{ display:block; }
+      #legend details:not([open]) .legend-body{ display:none; }
+
+      /* If you want to ensure the marker is black (some browsers) */
+      #legend summary::marker{ color:#000; }
+      /* chromium/webkit tweak */
+      #legend summary::-webkit-details-marker{ color:#000; }
+
+    /* Desktop: put Legend at bottom-right */
+    @media (min-width: 769px){
+      #legend{
+        position: absolute; 
+        right: 12px;      /* was left: 12px */
+        bottom: 12px;
+        left: auto;       /* ensure it doesn’t stick to the left */
+        top: auto;
+        width: 250px;
+        z-index: 903;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        padding: 10px 14px;
+        max-height: 68vh;
+        overflow: hidden;
+        font-family: "Palanquin", sans-serif;
+        }
+
+    }
+
+    /* Reusable card */
+    .card {
+      background:#fff; padding:10px 12px; border-radius:10px;
+      box-shadow:0 1px 4px rgba(0,0,0,.25); font-size:12px; line-height:1.4;
+    }
+    .card strong, .card .num { font-weight:700; }
+
+    /* Summary card */
+    #summaryCard { margin-top: 10px; }
+
+    #legend { margin-left: 0; }            /* anchored left already */
+    #legend .panel-summary { margin-bottom: 8px; }
+    .legend-item{ display:flex; align-items:center; gap:8px; margin:4px 0; }
+    .legend-line{ height:0; border-top:3px solid; width:30px; }
+    .legend-dot{ width:10px; height:10px; border-radius:50%; display:inline-block; border:1px solid #fff; box-shadow:0 0 1px rgba(0,0,0,.6); }
+    .legend-title{ font-weight:700; margin:2px 0 6px 0; font-size:12px; }
+    #legend .legend-scroll {
+      min-height: 0;
+      margin-top: 8px;
+      padding: 8px 8px 12px 8px;
+      border-top: 1px solid #e5e7eb;
+      max-height: 20vh;
+      overflow-y: auto;
+      scrollbar-width: thin; /* Firefox */
+      scrollbar-gutter: stable;
+    }
+     #legend details[open] #legendBody {
+        display:flex;              /* column layout */
+        flex-direction: column;
+        gap:8px;
+        background:#fff;
+        border-radius:10px;
+        box-shadow: inset 0 0 0 1px rgba(0,0,0,.06);
+        padding:8px 10px;
+        box-sizing:border-box;
+
+        /* The body takes the available space inside the card and stops */
+        max-height: calc(68vh - 56px);  /* 56px ~= header + paddings; adjust if needed */
+        overflow:visible;
+      }
+
+      .legend-dot-group {
+      display: flex;
+      gap: 3px;             /* smaller space between dots */
+      align-items: center;
+      }
+  
+    /* Collapsible legend shell */
+    #legend details{ margin:0; padding:0; border:0; background:transparent; }
+    .legend-summary{ cursor:pointer; font-weight:700; margin-bottom:6px; }
+    #legend .legend-summary::-webkit-details-marker { display: none; }
+
+    /* When expanded, show the body as a card above the summary */
+    #legend details[open] #legendBody{
+      display: block;
+      margin-top: 8px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.28);
+      padding: 10px 12px;
+      max-height: 40vh;         /* grows upward */
+      /* overflow: visible;           scroll inside card if tall */
+    }
+
+    /* This line actually collapses the content so the card shrinks */
+    #legend details:not([open]) > #legendBody { display: none; }
+
+    /* Mobile layout */
+    @media (max-width: 768px) {
+      :root { --header-h: 56px; }
+
+      .header-panel { padding: 8px 12px; }
+      .header-panel .logo img { height: 40px; }
+      .header-panel .title h1 { font-size: 18px; }
+      .header-panel .title h2 { font-size: 14px; }
+
+      /* Controls: bottom sheet, with iOS safe-area support */
+      #controls{
+        position: fixed;
+        top: auto;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(92vw, 520px);
+        max-height: 50vh;
+        overflow: auto;
+        padding: 12px;
+        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+        z-index: 1001;
+        border-radius: 12px;
+        background: #fff;
+      
+      }
+     
+/* Keep arrow adjustment only for small screens */
+@media (max-width: 768px) {
+  #legend summary::-webkit-details-marker { display: none; }
+  #legend summary::marker { content: ""; }
+
+    #legend .legend-summary {
+      position: relative;
+      padding: 10px 12px 10px 22px; /* space for arrow */
+    }
+
+      #legend .legend-summary::before {
+        content: "▼";
+        position: absolute;
+        left: 8px;
+        top: 50%;
+        transform: translateY(-50%) rotate(-90deg);
+        font-size: 12px;
+        color: #111;
+        pointer-events: none;
+      }
+
+      #legend details[open] .legend-summary::before {
+        transform: translateY(-50%) rotate(0deg);
+      }
+    }     
+
+      /* Bigger tap targets; prevents iOS zoom on focus */
+      #controls select,
+      #controls label { font-size: 12px; }
+      #controls select { padding: 8px 10px; }
+      #controls option {
+      font-family: "Palanquin", sans-serif !important;
+      font-weight: 400;
+      color: #111;
+      letter-spacing: 0.2px;
+      }
+
+      #controls select {
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        background-color: #fff;
+      }
+
+      /* Keep Mapbox controls clear of the home-indicator */
+      /* mobile: push nav up by --nav-offset plus safe-area */
+      .mapboxgl-ctrl-bottom-right {
+        bottom: calc(env(safe-area-inset-bottom, 0px) + var(--nav-offset, 8px));
+        right: 8px;
+      }
+
+      .mapboxgl-ctrl-bottom-left  { 
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); 
+        left:  8px; 
+      }
+
+      /* Legend: tuck to bottom-right and make narrower */
+      #legend{
+        position: fixed;
+        top: calc(var(--header-h) + 8px);
+        right: 12px;
+        left: auto;
+        bottom: auto;
+        width: min(86vw, 320px);
+        z-index: 1002;          /* above the map, separate from #controls */
+        border-radius: 12px;
+        box-shadow: 0 2px 10px rgba(0,0,0,.15);
+        background: #fff;
+      }
+  
+
+      /* shorter donor list on phones */
+      #legend .legend-scroll{
+        flex: 1 1 auto;           /* take remaining height inside legendBody */
+        min-height: 0;            /* required for flex children to actually shrink */
+        overflow-y: auto;         /* the only scrollbar */
+        margin-top:8px; padding-top:8px; border-top:1px solid #e5e7eb;
+        padding-right: 6px;       /* room for scrollbar so text doesn’t clip */
+        scrollbar-width: thin;    /* Firefox */
+      }
+
+      /* smoother touch-drag on iOS */
+      .mapboxgl-canvas { touch-action: pan-x pan-y; }
+    }
+    /* Collapsible card look (shared) */
+    .panel-summary{
+      display:block;
+      cursor:pointer;
+      font-weight:700;
+      user-select:none;
+      padding:10px 12px;
+      border-radius:12px;
+      background:#fff;
+      box-shadow:0 1px 4px rgba(0,0,0,.25);
+      list-style:none;
+    }
+    .panel-summary::-webkit-details-marker{ display:none; }
+    .panel-body{
+      margin-top:8px;
+      background:#fff;
+      border-radius:12px;
+      box-shadow:0 1px 6px rgba(0,0,0,.28);
+      padding:10px 12px;
+    }
+ 
+  </style>
+
+  <script>
+    function setVh() {
+      document.documentElement.style.setProperty('--vh', window.innerHeight + 'px');
+    }
+    setVh();
+    window.addEventListener('resize', setVh);
+    window.addEventListener('orientationchange', setVh);
+    window.addEventListener('pageshow', setVh);
+    document.addEventListener('DOMContentLoaded', setVh);
+  </script>
+
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+      const d = document.getElementById('legendPanel');
+      if (d && window.matchMedia('(max-width: 768px)').matches) d.open = false;
+    });
+  </script>
+
+  <script>
+  
+    // Re-run when Filters collapse/expand (if you used <details> for Filters)
+    const filtersDetails = document.querySelector('#controls details');
+    if (filtersDetails) filtersDetails.addEventListener('toggle', placeLegend);
+
+    // Also, if your legend itself is collapsible, this keeps things tidy
+    const legendDetails = document.querySelector('#legend details');
+    if (legendDetails) legendDetails.addEventListener('toggle', placeLegend);
+  
+  </script>
+
+</head>
+<body>
+  <div class="header-panel">
+    <div class="logo"><img src="Logo.png" alt="United Way Logo" /></div>
+    <div class="title"><h1>UWBe Impact Atlas</h1><h2>Climate Action : One Billion Drops</h2></div>
+    <div class="menu"><a href="https://www.uwbengaluru.org/impact-areas/climate-action/" target="_blank">ABOUT</a></div>
+  </div>
+
+  <div id="controls">
+    <details open>
+      <summary style="cursor:pointer;font-weight:700;margin-bottom:8px">Filters & Summary</summary>
+
+      <label for="donorSel">Select Donor</label>
+      <select id="donorSel"><option value="">All Donors…</option></select>
+
+      <label for="fySel">Select Financial Year</label>
+      <select id="fySel"><option value="">All Years…</option></select>
+
+      <div class="row">
+        <label for="zoneSel">Zone</label>
+        <select id="zoneSel" disabled><option value="">Select donor/FY first…</option></select>
+      </div>
+
+      <div class="muted">Tip: choose a Donor or FY to reveal relevant Zones.</div>
+
+      <div class="row">
+        <label style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="hydroToggle" /> Show hydrological boundaries
+        </label>
+      </div>
+
+      <div id="summaryCard" class="card counts">
+        <div id="countLoc">Locations (filtered): <span class="num">–</span></div>
+        <div id="countWells">Wells (filtered): <span class="num">–</span></div>
+        <div id="narrative"></div>
+        <div id="hydroGain"></div>
+      </div>
+
+      <div id="err" class="error"></div>
+    </details>
+  </div>
+
+  <div id="map"></div>
+  <div id="legend" class="legend-card">
+
+      <details>
+      <summary class="legend-summary">Legend</summary>
+      <div id="legendBody" class="legend-body"></div>
+    </details>
+  </div>
+  <!-- <div id="inset" aria-hidden="true"></div> -->
+
+<script>
+mapboxgl.accessToken = 'pk.eyJ1Ijoia2h1c2hidWtiIiwiYSI6ImNtYW9zcjQxaTBhcXcyaXB2ZXc0YTVrNmYifQ.uujp1Y7b8fCTgt9nvddvzA';
+
+/* ---------- Files ---------- */
+const FILES = {
+  district  : 'District_Boundary_Final_CRS.geojson',
+  zones     : 'BBMP_Zones_Final_CRS.geojson',
+  wards     : 'BBMP_Wards_225_Final_CRS.geojson',
+  watersheds: 'Watersheds_BU_Clip_CRS.geojson',
+  subws     : 'Sub_Watersheds_BUrban_Clip_CRS.geojson',
+  microws   : 'BBMP_Micro_Watershed_Final_CRS.geojson',
+  bbmpBoundary: 'BBMP_Boundary_Final_CRS.geojson',
+  wells_pts : 'wells.csv'
+};
+
+async function addBBMPBoundary() {
+  // load the GeoJSON
+  const data = await fetch(FILES.bbmpBoundary).then(r => r.json());
+
+  // If the file contains Polygons, convert rings to LineString so we can set line-width
+  const lineData = (data.features || []).some(f => /Polygon/i.test(f.geometry?.type))
+    ? turf.polygonToLine(data)
+    : data;
+
+  // add source once
+  if (!map.getSource('bbmp')) {
+    map.addSource('bbmp', { type: 'geojson', data: lineData });
+  } else {
+    map.getSource('bbmp').setData(lineData);
+  }
+
+  // draw the red outline
+  if (!map.getLayer('bbmp-line')) {
+    map.addLayer(
+      {
+        id: 'bbmp-line',
+        type: 'line',
+        source: 'bbmp',
+        paint: {
+          'line-color': '#e11d48',   // red like your screenshot
+          'line-width': 3,
+          'line-opacity': 0.95
+        },
+        layout: { 'line-join': 'round', 'line-cap': 'round' }
+      },
+      'road-label' // optional: ensure it sits above the base style labels
+    );
+  }
+}
+
+/* ---------- State ---------- */
+const store = { geo:{}, bbmp:{}, ui:{ zonesShown:false } };
+let map, inset;
+let wellsAll      = {type:'FeatureCollection',features:[]};
+let wellsFiltered = {type:'FeatureCollection',features:[]};
+let wellPointsAll = {type:'FeatureCollection',features:[]};
+const wellsByLoc  = new Map();   // _locNorm -> Feature[]
+const bboxByLoc   = new Map();   // _locNorm -> [minX,minY,maxX,maxY]
+let donorStats    = new Map();   // donor -> {color,totalWells,totalLocations,years:Set}
+
+/* ---------- Helpers ---------- */
+const errEl=()=>document.getElementById('err');
+function showError(m){const e=errEl(); e.textContent=m; e.style.display='block'; console.error(m);} 
+function clearError(){const e=errEl(); e.textContent=''; e.style.display='none';}
+const plural=(n,one,more)=>n===1?one:more;
+const norm=(str)=>String(str||'').trim().toLowerCase().replace(/\s+/g,' ');
+const ZONE_AUTO_ZOOM = 9.8;   // trigger zoom level
+// --- Hydrological gain constants ---
+const WELL_VOL_M3      = 4.27;     // storage per well when full (m³)
+const RUNOFF_DAYS_YR   = 30;       // based on last 30 years IMD (days with runoff)
+const LITERS_PER_M3    = 1000;
+const TANKER_LITERS    = 6000;     // typical BLR tanker size
+const LPCD             = 135;      // CPHEEO/CPCB urban norm (L/person/day)
+const PERSONS_PER_HH   = 4;        // Bengaluru average household size (approx)
+const HH_L_YEAR        = LPCD * PERSONS_PER_HH * 365; // liters/household/year
+
+/* Canonical FY from “Year of Completion” */
+function canonicalFY(raw){
+  if (raw==null) return '';
+  let s = String(raw).trim();
+  if (!s) return '';
+  let m = s.match(/^(\d{4})\s*[-–\/]\s*(\d{2,4})$/);
+  if (m){
+    const start = +m[1];
+    let end = +m[2]; if (end<100) end = 2000+end;
+    return `${start}-${end}`;
+  }
+  const MON = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+  m = s.match(/^([A-Za-z]{3,})[\s\-\/]?(\d{2,4})$/);
+  if (m){
+    const mon = (MON[m[1].slice(0,3).toLowerCase()] || 3);
+    let year = +m[2]; if (year<100) year = 2000+year;
+    const start = (mon>=4) ? year : (year-1);
+    return `${start}-${start+1}`;
+  }
+  m = s.match(/^(\d{1,2})[\/\-](\d{2,4})$/) || s.match(/^(\d{4})[\/\-](\d{1,2})$/);
+  if (m){
+    let a = +m[1], b = +m[2]; let mon, year;
+    if (a>12){ year=a; mon=b; } else { mon=a; year=b; }
+    if (year<100) year = 2000+year;
+    const start = (mon>=4) ? year : (year-1);
+    return `${start}-${start+1}`;
+  }
+  m = s.match(/^\d{4}$/);
+  if (m){ const y=+s; return `${y-1}-${y}`; }
+  return '';
+}
+
+function compactFYRange(yearSet){
+  if (!yearSet || !yearSet.size) return '';
+  const starts = [...yearSet].map(fy => +fy.split('-')[0]).sort((a,b)=>a-b);
+  const minS = starts[0], maxS = starts[starts.length-1];
+  return `${minS}–${maxS+1}`;
+}
+
+function getName(level, props){
+  const keys = {
+    zones: ['ZoneName','ZONE_NAME','ZONE','zone_name','zone','Name','NAME'],
+    wards: ['KGISWardName','WardName','WARD_NAME','NAME'],
+    district: ['district','DISTRICT','NAME']
+  }[level] || ['NAME'];
+  for (const k of keys){ if (props && props[k]!=null && String(props[k]).trim()!=='') return String(props[k]); }
+  return '(unnamed)';
+}
+
+async function getGeo(key){
+  if (store.geo[key]) return store.geo[key];
+  const res = await fetch(FILES[key]); if(!res.ok) throw new Error(`Failed to load ${FILES[key]}`);
+  const g = await res.json(); if(!g || !g.features) throw new Error(`Invalid GeoJSON in ${FILES[key]}`);
+  g.features.forEach((f,i)=>{ if(!f.properties) f.properties={}; f.properties.__uid__=`${key}:${i}`; });
+  store.geo[key]=g;
+  if(map && !map.getSource(key)) map.addSource(key,{type:'geojson',data:g});
+  return g;
+}
+
+function populateSelect(levelKey, sel, feats){
+  const pretty = { zones:'Zones' };
+  sel.innerHTML = `<option value="">All ${pretty[levelKey]||levelKey}…</option>`;
+  feats.slice().sort((a,b)=>getName(levelKey,a.properties).localeCompare(getName(levelKey,b.properties)))
+    .forEach(f=>{
+      const o=document.createElement('option');
+      o.value=f.properties.__uid__;
+      o.textContent=getName(levelKey,f.properties);
+      sel.appendChild(o);
+    });
+  sel.disabled = feats.length===0;
+}
+
+function sumWells(features){ return features.reduce((n,f)=> n + (Number(f.properties.wells_count)||0), 0); }
+
+/* ---------- Donor colors & stats ---------- */
+const DONOR_COLORS = [
+  '#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#8c564b','#e377c2','#7f7f7f',
+  '#bcbd22','#17becf','#e41a1c','#377eb8','#4daf4a','#984ea3','#ff7f00','#ffff33',
+  '#a65628','#f781bf','#999999','#66c2a5','#fc8d62','#8da0cb','#e78ac3','#a6d854',
+  '#ffd92f','#e5c494','#b3b3b3'
+];
+function colorForDonor(d){
+  let h=0; for(let i=0;i<d.length;i++){ h=(h*31 + d.charCodeAt(i))|0; }
+  const idx = Math.abs(h) % DONOR_COLORS.length;
+  return DONOR_COLORS[idx];
+}
+function buildDonorStats(){
+  donorStats.clear();
+  wellsAll.features.forEach(f=>{
+    const d = f.properties.donor || 'Unknown';
+    if(!donorStats.has(d)) donorStats.set(d,{ color: colorForDonor(d), totalWells:0, totalLocations:0, years:new Set() });
+  });
+  const byDonorLocations = new Map();
+  wellsAll.features.forEach(f=>{
+    const d = f.properties.donor || 'Unknown';
+    const key = `${f.geometry.coordinates.join(',')}`;
+    if(!byDonorLocations.has(d)) byDonorLocations.set(d,new Set());
+    byDonorLocations.get(d).add(key);
+    const s = donorStats.get(d);
+    s.totalWells += (+f.properties.wells_count||0);
+    if (f.properties.fy) s.years.add(f.properties.fy);
+  });
+  for(const [d,set] of byDonorLocations.entries()) donorStats.get(d).totalLocations = set.size;
+}
+
+/* ---------- Legend & Summary ---------- */
+function renderLegend() {
+  const host = document.getElementById('legend');
+  if (host && !document.getElementById('legendDetails')) {
+    host.innerHTML = `
+      <details id="legendDetails">
+        <summary class="legend-summary">Legend</summary>
+        <div id="legendBody" class="legend-body"></div>
+      </details>`;
+  }
+  const body = document.getElementById('legendBody');
+  if (!body) return;
+
+  // Helper: is a layer visible?
+  const vis = id => map && map.getLayer(id) && map.getLayoutProperty(id, 'visibility') !== 'none';
+
+  // Watershed colors (must match addHydrologyLayers)
+  const COLORS = {
+    ARKAVATHI:      { label: 'Arkavathi',                      fill: '#f59e0b' },
+    VRISHABHAVATHI: { label: 'Vrishabhavathi',                 fill: '#10b981' },
+    HEBBAL:         { label: 'Hebbal',                         fill: '#3b82f6' },
+    KC:             { label: 'Koramangala–Challaghatta (KC)',  fill: '#ec4899' }
+  };
+
+  // Admin rows (only if their layers are currently visible)
+  const adminHTML = `
+    ${vis('blr-line')  ? '<div class="legend-item"><span class="legend-line" style="border-top-color:#1255d7"></span> Bengaluru Urban District</div>' : ''}
+    ${vis('bbmp-line') ? '<div class="legend-item"><span class="legend-line" style="border-top-color:#e11d48"></span> BBMP Boundary</div>' : ''}
+    ${vis('zones-line')? '<div class="legend-item"><span class="legend-line" style="border-top-color:#0e7490"></span> Zones</div>' : ''}
+    <div class="legend-item">
+    <div class="legend-dot-group">
+      <span class="legend-dot" style="background:#28a745"></span>
+      <span class="legend-dot" style="background:#007bff"></span>
+      <span class="legend-dot" style="background:#dc3545"></span>
+      <span class="legend-dot" style="background:#ffc107"></span>
+    </div>
+    <span class="legend-label">Percolation well locations</span>
+  </div>
+  `;
+
+  // Donors list (sorted)
+  const donorsSorted = [...(donorStats || new Map()).entries()]
+    .sort((a, b) => (b[1]?.totalWells || 0) - (a[1]?.totalWells || 0));
+  const donorsHTML = donorsSorted.map(([name, st]) => `
+    <div class="legend-item" title="${name}">
+      <span class="legend-dot" style="background:${st.color}"></span>
+      <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</span>
+      <span class="num">${st.totalWells}</span>
+    </div>`).join('');
+
+  body.innerHTML = `
+    ${adminHTML}
+    <div class="legend-title" style="margin-top:6px">All donors</div>
+    <div class="legend-scroll">${donorsHTML}</div>
+  `;
+}
+
+function updateSummaryCard(){
+  const donor = document.getElementById('donorSel').value || 'Donors';
+  const fy    = document.getElementById('fySel').value;
+  const zones = new Set(wellsFiltered.features.map(f=>f.properties._zoneName).filter(Boolean));
+  const totalW = sumWells(wellsFiltered.features);
+  const totalL = wellsFiltered.features.length;
+    // --- Hydrological gain (auto-updates with current filters) ---
+  const wellsCount = totalW; // wells_count is already summed into totalW
+  const annualM3   = wellsCount * WELL_VOL_M3 * RUNOFF_DAYS_YR;    // m³/year
+  const tankers    = annualM3 / (TANKER_LITERS / LITERS_PER_M3);   // m³ / 6
+  const households = (annualM3 * LITERS_PER_M3) / HH_L_YEAR;       // hh/year
+
+  const fmt = n => Math.round(n).toLocaleString('en-IN');
+
+  const hydroEl = document.getElementById('hydroGain');
+  if (hydroEl){
+    hydroEl.innerHTML = `
+      <br> <!-- adds a small space before the section -->
+      🌿 <strong>Environmental Impact:</strong>
+      The supported wells can capture about
+      <span class="num">${fmt(annualM3)}</span> m³ of rainwater each year —
+      roughly <span class="num">${fmt(tankers)}</span> water tankers (6,000 L each),
+      or the annual water needs of ~<span class="num">${fmt(households)}</span> households
+      (135 LPCD) in Bengaluru.
+      <br><span class="muted">
+        Note: 30 runoff days/year based on last 30 years of IMD rainfall data
+        and per-well storage of 4.27 m³ is considered for calculation.
+      </span>
+    `;
+  }
+
+  document.getElementById('countLoc').innerHTML   = `Locations : <span class="num">${totalL}</span>`;
+  document.getElementById('countWells').innerHTML = `Wells : <span class="num">${totalW}</span>`;
+
+  let msg = `${donor} supported <span class="num">${totalW}</span> percolation ${plural(totalW,'well','wells')} across <span class="num">${totalL}</span> ${plural(totalL,'location','locations')} in BBMP`;
+  if (fy) msg += `, FY <span class="num">${fy}</span>`;
+  if (zones.size) msg += `; Zones: ${[...zones].sort().join(', ')}`;
+  msg += '.';
+  document.getElementById('narrative').innerHTML = msg;
+}
+
+/* ---------- Build wells + joins ---------- */
+async function buildWells(rows){
+  const cols = rows.length?Object.keys(rows[0]):[];
+  const donorKey = cols.find(c=>/^donor[ _]?name$/i.test(c)) || 'donor name';
+  const locKey   = cols.find(c=>/^location[ _]?name$/i.test(c)) || 'Location Name';
+  const yocKey   = cols.find(c=>/^year[ _]?of[ _]?completion$/i.test(c)) || 'Year of Completion';
+  const wellsKey = cols.find(c=>c.trim().toLowerCase()==='no of percolation well constructed') || 'No of Percolation well Constructed ';
+  const latKey   = cols.find(c=>/latitude|^lat$/i.test(c)) || 'lat';
+  const lonKey   = cols.find(c=>/longitude|lon|lng|^long$/i.test(c)) || 'lon';
+
+  wellsAll = {
+    type:'FeatureCollection',
+    features: rows
+      .filter(r => r && r[latKey]!=null && r[lonKey]!=null && String(r[latKey]).trim()!=='' && String(r[lonKey]).trim()!=='')
+      .map(r => ({
+        type:'Feature',
+        geometry:{ type:'Point', coordinates:[ Number(r[lonKey]), Number(r[latKey]) ] },
+        properties:{
+          donor: String(r[donorKey] ?? '').trim(),
+          location: String(r[locKey] ?? '').trim(),
+          fy: canonicalFY(r[yocKey]),
+          wells_count: Number(r[wellsKey]) || 0
+        }
+      }))
+  };
+
+  const wards = store.geo.wards.features;
+  const zones = store.geo.zones.features;
+
+  wellsAll.features.forEach(pt=>{
+    const hitW = wards.find(w => turf.booleanPointInPolygon(pt, w));
+    if (hitW){
+      pt.properties._wardName = getName('wards', hitW.properties);
+      const wardZoneName = hitW.properties.ZoneName || hitW.properties.ZONE_NAME || hitW.properties.zone || hitW.properties.ZONE || '';
+      pt.properties._zoneName = String(wardZoneName).trim();
+
+      const uidByName = store.bbmp.zoneUIDByNormName?.[norm(pt.properties._zoneName)];
+      if (uidByName){
+        pt.properties._zoneUID = uidByName;
+      } else {
+        const hitZPoly = zones.find(z => turf.booleanPointInPolygon(pt, z));
+        if (hitZPoly){
+          pt.properties._zoneUID  = hitZPoly.properties.__uid__;
+          pt.properties._zoneName = getName('zones', hitZPoly.properties);
+        }
+      }
+    }
+  });
+
+  wellsFiltered = { type:'FeatureCollection', features: wellsAll.features.slice() };
+  buildDonorStats();
+}
+
+/* ---------- Hydrology (ONE set only; start hidden) ---------- */
+async function addHydrologyLayers(){
+  // Load full watersheds GeoJSON
+  const watershedsRaw = await fetch(FILES.watersheds).then(r=>r.json());
+
+  // Normalize + keep only these 4
+  const TARGETS = {
+    ARKAVATHI: {label:'Arkavathi',               fill:'#f59e0b', line:'#b45309'},
+    VRISHABHAVATHI: {label:'Vrishabhavathi',     fill:'#10b981', line:'#047857'},
+    HEBBAL: {label:'Hebbal',                      fill:'#3b82f6', line:'#1d4ed8'},
+    KC: {label:'Koramangala–Challaghatta (KC)',  fill:'#ec4899', line:'#be185d'}
+  };
+
+  // Which property holds the name in your file
+  const NAME_KEYS = ['WS_name','ws_name','WS_Name','NAME'];
+
+  const getWSName = p => {
+    for (const k of NAME_KEYS) if (p && p[k] != null && String(p[k]).trim() !== '') return String(p[k]).trim();
+    return '';
+  };
+  const toKey = s => s.toUpperCase().replace(/\s|[-–]/g,'')
+    .replace(/KORAMANGALA|KORAMANGALA/i,'KORAMANGALA')      // defensive
+    .replace(/CHALLAGHATTA|CHALLAGHATTA/i,'CHALLAGHATTA');  // defensive
+
+  // Map common spellings to our 4 keys
+  const keyFromName = (n) => {
+    const u = n.toUpperCase();
+    if (u.includes('ARKAV')) return 'ARKAVATHI';
+    if (u.includes('VRISH')) return 'VRISHABHAVATHI';
+    if (u.includes('HEBBAL')) return 'HEBBAL';
+    if (u.includes('KORAM') || u.includes('KORAMANGALA') || u.includes('CHALLAGHATTA') || u.includes('KC'))
+      return 'KC';
+    return '';
+  };
+
+  const filtered = {
+    type:'FeatureCollection',
+    features:(watershedsRaw.features||[])
+      .map(f=>{
+        const nm = getWSName(f.properties);
+        const key = keyFromName(nm);
+        if (!key || !TARGETS[key]) return null;
+        return {
+          type:'Feature',
+          geometry:f.geometry,
+          properties:{...f.properties, WS_name:nm, WS_key:key}
+        };
+      })
+      .filter(Boolean)
+  };
+
+  // Source
+  if (!map.getSource('hydro-watersheds')) {
+    map.addSource('hydro-watersheds',{type:'geojson',data:filtered});
+  } else {
+    map.getSource('hydro-watersheds').setData(filtered);
+  }
+
+  // Build a Mapbox "match" for fill/line colors
+  const wsKeys = Object.keys(TARGETS);
+  const fillMatch = ['match',['get','WS_key']];
+  const lineMatch = ['match',['get','WS_key']];
+  wsKeys.forEach(k => { fillMatch.push(k, TARGETS[k].fill); });
+  wsKeys.forEach(k => { lineMatch.push(k, TARGETS[k].line); });
+  fillMatch.push('#cccccc'); // default (unused)
+  lineMatch.push('#666666');
+
+  // Fill
+  if (!map.getLayer('hydro-watersheds-fill')) {
+    map.addLayer({
+      id:'hydro-watersheds-fill', type:'fill', source:'hydro-watersheds',
+      layout:{ visibility:'none' },
+      paint:{
+        'fill-color': fillMatch,
+        'fill-opacity': 0.25
+      }
+    });
+  }
+
+  // Outline
+  if (!map.getLayer('hydro-watersheds-line')) {
+    map.addLayer({
+      id:'hydro-watersheds-line', type:'line', source:'hydro-watersheds',
+      layout:{ visibility:'none' },
+      paint:{
+        'line-color': lineMatch,
+        'line-width': 2.2,
+        'line-opacity': 0.95
+      }
+    });
+  }
+
+  // Labels
+  if (!map.getLayer('hydro-watersheds-label')) {
+    map.addLayer({
+      id:'hydro-watersheds-label', type:'symbol', source:'hydro-watersheds',
+      layout:{
+        visibility:'none',
+        'text-field':['get','WS_name'],
+        'text-size':['interpolate',['linear'],['zoom'], 9,11, 12,12, 14,14],
+        'text-font':['DIN Pro Medium','Arial Unicode MS Regular'],
+        'text-allow-overlap': false
+      },
+      paint:{
+        'text-color':'#111827',
+        'text-halo-color':'#ffffff',
+        'text-halo-width':1.2,
+        'text-halo-blur':0.4
+      }
+    });
+  }
+
+  // Ensure any old sub/micro layers stay hidden (if they exist in your file)
+  ['hydro-subws-line','hydro-subws-label','hydro-microws-line']
+    .forEach(id => { if (map.getLayer(id)) map.setLayoutProperty(id,'visibility','none'); });
+}
+
+/* Show/hide hydrology layers */
+function setHydrologyVisible(show){
+  const v = show ? 'visible' : 'none';
+
+  // Show ONLY the 4 target watersheds (fill + outline + labels)
+  ['hydro-watersheds-fill','hydro-watersheds-line','hydro-watersheds-label']
+    .forEach(id => { if (map.getLayer(id)) map.setLayoutProperty(id,'visibility',v); });
+
+  // Keep sub/micro layers off entirely
+  ['hydro-subws-line','hydro-subws-label','hydro-microws-line']
+    .forEach(id => { if (map.getLayer(id)) map.setLayoutProperty(id,'visibility','none'); });
+
+  // Hide admin outlines while hydrology is on
+  if (map.getLayer('blr-line'))  map.setLayoutProperty('blr-line',  show ? 'none' : 'visible');
+  if (map.getLayer('bbmp-line')) map.setLayoutProperty('bbmp-line', show ? 'none' : 'visible');
+
+  renderLegend();
+}
+
+/* ---------- Zones visibility & filtering ---------- */
+function toggleAdminVisibility(show){
+  const v = show ? 'visible' : 'none';
+  // if(map.getLayer('bbmp-line')) map.setLayoutProperty('bbmp-line','visibility',v);
+  renderLegend();
+}
+
+function setZonesFilterByUID(zoneUID){
+  if (!map.getLayer('zones-line')) return;
+  const hasUID = !!zoneUID;
+  if (map.getLayer('zones-hover')) {
+    map.setFilter('zones-hover', hasUID ? ['==', ['get','__uid__'], zoneUID] : ['==', ['get','__uid__'], '__none__']);
+  }
+}
+
+function updateZoneVisibility(){
+  if (!map.getLayer('zones-line')) return;
+  const zoneSel = document.getElementById('zoneSel');
+  const zoneUID = zoneSel ? zoneSel.value : '';
+  setZonesFilterByUID(zoneUID || '');
+  renderLegend();
+}
+
+/* ---------- Filters UI ---------- */
+function setupFiltersUI(){
+  const donorSel=document.getElementById('donorSel');
+  const fySel   =document.getElementById('fySel');
+  const zoneSel =document.getElementById('zoneSel');
+
+  function setDonorOptions(list, keep){
+    const val=keep && list.includes(keep)?keep:'';
+    donorSel.innerHTML = '<option value="">All Donors…</option>' + list.map(d=>`<option${d===val?' selected':''}>${d}</option>`).join('');
+  }
+  function setFYOptions(list, keep){
+    const val=keep && list.includes(keep)?keep:'';
+    fySel.innerHTML = '<option value="">All Years…</option>' + list.map(y=>`<option${y===val?' selected':''}>${y}</option>`).join('');
+  }
+
+  function rebuildAndFilter(trigger){
+    const curDonor = donorSel.value;
+    const curFY    = fySel.value;
+    const curZone  = zoneSel.value;
+
+    const donorsAll = [...new Set(
+      wellsAll.features
+        .filter(f => !curFY || f.properties.fy===curFY)
+        .map(f => f.properties.donor)
+        .filter(Boolean)
+    )].sort();
+    setDonorOptions(donorsAll, curDonor);
+    const donorFinal = donorsAll.includes(curDonor) ? curDonor : '';
+
+    const fyAll = [...new Set(
+      wellsAll.features
+        .filter(f => !donorFinal || f.properties.donor===donorFinal)
+        .map(f => f.properties.fy)
+        .filter(Boolean)
+    )].sort();
+    setFYOptions(fyAll, curFY);
+    const fyFinal = fyAll.includes(curFY) ? curFY : '';
+
+    let base = wellsAll.features.filter(f =>
+      (!donorFinal || f.properties.donor===donorFinal) &&
+      (!fyFinal || f.properties.fy===fyFinal)
+    );
+
+    const zoneUIDs = [...new Set(base.map(f=>f.properties._zoneUID).filter(Boolean))];
+    const zonesSubset = store.geo.zones.features.filter(z => zoneUIDs.includes(z.properties.__uid__));
+    const prev = (trigger==='zone') ? curZone : '';
+    populateSelect('zones', zoneSel, zonesSubset);
+    zoneSel.disabled = zonesSubset.length===0;
+    if (prev && zoneUIDs.includes(prev)) zoneSel.value = prev;
+    else if (zonesSubset.length===1) zoneSel.value = zonesSubset[0].properties.__uid__;
+
+    const zoneFinal = zoneSel.value;
+    wellsFiltered.features = base.filter(f => (!zoneFinal || f.properties._zoneUID===zoneFinal));
+
+    if (map.getSource('wells')){
+      map.getSource('wells').setData(wellsFiltered);
+      const pairs = [];
+      for (const [d,st] of donorStats.entries()) pairs.push(d, st.color);
+      map.setPaintProperty('wells-circle','circle-color', ['match',['get','donor'], ...pairs, '#999']);
+    }
+
+    toggleAdminVisibility(!!donorFinal || !!fyFinal);
+
+    if (wellsFiltered.features.length){
+      if (wellsFiltered.features.length===1){
+        const [x,y]=wellsFiltered.features[0].geometry.coordinates;
+        const dLon=0.02, dLat=0.02*Math.cos(y*Math.PI/180);
+        map.fitBounds([[x-dLon,y-dLat],[x+dLon,y+dLat]],{padding:70,duration:600,maxZoom:12.6});
+      } else {
+        map.fitBounds(turf.bbox(wellsFiltered),{padding:60,duration:700,maxZoom:12.6});
+      }
+    }
+
+    updateInset(); // no-op if inset not built
+
+    if (map.getLayer('wellPoints-circle')) {
+      map.setLayoutProperty('wellPoints-circle','visibility','none');
+      map.setFilter('wellPoints-circle', ['==', ['get','_locNorm'], '__none__']);
+    }
+    updateSummaryCard();
+    updateZoneVisibility();
+    renderLegend();
+  }
+
+  donorSel.addEventListener('change', ()=>rebuildAndFilter('donor'));
+  fySel  .addEventListener('change', ()=>rebuildAndFilter('fy'));
+  zoneSel.addEventListener('change', ()=>{ rebuildAndFilter('zone'); });
+
+  const donors=[...new Set(wellsAll.features.map(f=>f.properties.donor).filter(Boolean))].sort();
+  const fys   =[...new Set(wellsAll.features.map(f=>f.properties.fy).filter(Boolean))].sort();
+  setDonorOptions(donors, '');
+  setFYOptions(fys, '');
+  populateSelect('zones', zoneSel, store.geo.zones.features);
+  zoneSel.disabled = false;
+
+  rebuildAndFilter();
+}
+
+/* ---------- Inset (optional, not called) ---------- */
+function buildInset(blrFC){ /* left defined but not called */ }
+function updateInset(){ if (!inset) return; if (inset.getSource('wellsInset')) inset.getSource('wellsInset').setData(wellsFiltered); }
+
+/* ---------- Per-well CSV loader ---------- */
+function headerPick(cols, matchers){
+  for (const raw of cols){
+    const c = stripBOM(raw);
+    for (const m of matchers){
+      if (typeof m === 'string'){
+        if (normHeader(c) === normHeader(m)) return raw;
+      } else if (m.test && m.test(c)) {
+        return raw;
+      }
+    }
+  }
+  return '';
+}
+const stripBOM = s => String(s||'').replace(/^\uFEFF/, '');
+const normHeader = s => stripBOM(s).toLowerCase().replace(/[\s_]+/g,' ').trim();
+
+async function fetchPercolationCSV(){
+  const candidates = [
+    'Percolation_ well_database.csv',
+    'Percolation_%20well_database.csv',
+    'Percolation%20well%20database.csv',
+    'Percolation well database.csv',
+    'Percolation_well_database.csv'
+  ];
+  for (const path of candidates){ try{ const res = await fetch(path); if(res.ok) return await res.text(); }catch(_){} }
+  throw new Error('Could not load the percolation CSV (tried several name variants).');
+}
+async function fetchWellsCSV(){
+  const candidates = [ FILES.wells_pts, 'wells.csv', 'percolation_wells.csv' ];
+  for (const path of candidates){ try{ const r = await fetch(path); if (r.ok) return await r.text(); }catch(_){/* ignore */} }
+  throw new Error('Could not load the wells CSV (tried several name variants).');
+}
+
+async function loadWellPointsCSV(){
+  const csvText = await fetchWellsCSV();
+  const rows = Papa.parse(csvText, { header:true, dynamicTyping:true }).data || [];
+  if (!rows.length){ wellPointsAll = {type:'FeatureCollection',features:[]}; return; }
+
+  const cols = Object.keys(rows[0] || {});
+  const donorKey   = headerPick(cols, ['Donor Name', /\bdonor\b/i]);
+  const locNameKey = headerPick(cols, ['Location Name', /\blocation\s*name\b/i]);
+  const latWellKey = headerPick(cols, ['Percolation well latitude',  /\bpercolation.*latitude\b/i]);
+  const lonWellKey = headerPick(cols, ['Percolation well longitude', /\bpercolation.*long/i]);
+  const wellIdKey  = headerPick(cols, [
+    'Unique ID of the Percolation well',
+    /unique[\s_]*id.*percolation.*well/i,
+    /well.*unique.*id/i
+  ]);
+  if (!wellIdKey) console.warn('Well ID column not found. CSV headers:', cols);
+
+  const feats = [];
+  wellsByLoc.clear(); 
+  bboxByLoc.clear();
+
+  rows.forEach(r => {
+    const lat = Number(r[latWellKey]);
+    const lon = Number(r[lonWellKey]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+
+    const location = String(r[locNameKey] ?? '').trim();
+    const donor    = String(r[donorKey]   ?? '').trim();
+    const wellId   = (r[wellIdKey] ?? '').toString().trim();
+    const locNorm  = norm(location);
+
+    const f = {
+      type:'Feature',
+      geometry:{ type:'Point', coordinates:[lon, lat] },
+      properties:{
+        well_id: wellId,
+        location: location,
+        donor: donor,
+        _locNorm: locNorm
+      }
+    };
+
+    try{
+      const wards = store.geo.wards?.features || [];
+      const zones = store.geo.zones?.features || [];
+      const hitW = wards.find(w => turf.booleanPointInPolygon(f, w));
+      if (hitW){
+        f.properties._wardName = getName('wards', hitW.properties);
+        const wardZoneName = hitW.properties.ZoneName || hitW.properties.ZONE_NAME || hitW.properties.zone || hitW.properties.ZONE || '';
+        f.properties._zoneName = String(wardZoneName).trim();
+      } else {
+        const hitZ = zones.find(z => turf.booleanPointInPolygon(f, z));
+        if (hitZ) f.properties._zoneName = getName('zones', hitZ.properties);
+      }
+    }catch(_){}
+
+    feats.push(f);
+    if (!wellsByLoc.has(locNorm)) wellsByLoc.set(locNorm, []);
+    wellsByLoc.get(locNorm).push(f);
+  });
+
+  wellsByLoc.forEach((arr, key) => {
+    bboxByLoc.set(key, turf.bbox({ type:'FeatureCollection', features: arr }));
+  });
+
+  wellPointsAll = { type:'FeatureCollection', features: feats };
+}
+
+/* ---------- Show wells for a specific location ---------- */
+function showLocationWells(locationName, geom){
+  if (!map.getLayer('wellPoints-circle')) return false;
+  if (!geom || geom.type !== 'Point') return false;
+
+  const radiiKm = [0.4, 0.8];
+  for (const r of radiiKm){
+    const circle = turf.buffer(geom, r, { units: 'kilometers' });
+    const inside = wellPointsAll.features.filter(f => turf.booleanPointInPolygon(f, circle));
+    if (inside.length){
+      map.setFilter('wellPoints-circle', ['within', circle]);
+      map.setLayoutProperty('wellPoints-circle', 'visibility', 'visible');
+      const bb = turf.bbox({ type:'FeatureCollection', features: inside });
+      map.fitBounds(bb, { padding: 60, duration: 700, maxZoom: 16 });
+      return true;
+    }
+  }
+  map.setLayoutProperty('wellPoints-circle','visibility','none');
+  map.setFilter('wellPoints-circle', ['==', ['get','_locNorm'], '__none__']);
+  const [x,y] = geom.coordinates;
+  const dLon=0.01, dLat=0.01*Math.cos(y*Math.PI/180);
+  map.fitBounds([[x-dLon,y-dLat],[x+dLon,y+dLat]], { padding:60, duration:600, maxZoom:15 });
+  return false;
+}
+
+/* ---------- Map init ---------- */
+function initMap(){
+  map=new mapboxgl.Map({ container:'map', style:'mapbox://styles/mapbox/streets-v12', center:[77.59,12.97], zoom:9.5 });
+
+  function addNavControl() {
+    const nav = new mapboxgl.NavigationControl();
+    if (window.matchMedia('(min-width: 769px)').matches) {
+      // Desktop: controls on top-right
+      map.addControl(nav, 'top-right');
+    } else {
+      // Mobile: controls on bottom-right
+      map.addControl(nav, 'bottom-right');
+    }
+  }
+
+  map.on('load', addNavControl);
+    function positionNavForMobile() {
+      if (!window.matchMedia('(max-width: 768px)').matches) return;
+
+      const panel   = document.getElementById('controls');
+      const details = panel?.querySelector('details');
+      const open    = details?.open ?? false;
+
+      // If the sheet is open, push nav above it; if closed, just 8px
+      const offset = open ? (panel.offsetHeight + 12) : 8;
+      document.documentElement.style.setProperty('--nav-offset', offset + 'px');
+    }
+
+    positionNavForMobile();
+    window.addEventListener('resize', positionNavForMobile);
+    window.addEventListener('orientationchange', positionNavForMobile);
+    document.querySelector('#controls details')?.addEventListener('toggle', positionNavForMobile);
+  
+  window.addEventListener('resize', () => {
+    // remove old and add fresh
+    const ctrls = document.querySelector('.mapboxgl-ctrl-top-right, .mapboxgl-ctrl-bottom-right');
+    if (ctrls) ctrls.remove();
+    addNavControl();
+  });
+
+  window.addEventListener('resize', () => map && map.resize());
+  window.addEventListener('orientationchange', () => map && map.resize());
+
+  map.on('load', async ()=>{
+    try{
+      // District
+      await getGeo('district');
+      const blrUrbanFC = { type:'FeatureCollection', features: store.geo.district.features.filter(f => /bengaluru\s*urban/i.test(getName('district',f.properties))) };
+      map.addSource('blr',{type:'geojson',data:blrUrbanFC});
+      map.addLayer({id:'blr-line',type:'line',source:'blr',paint:{'line-color':'#1255d7','line-width':3,'line-opacity':0.9}});
+      
+      async function addBBMPBoundary() {
+        const res = await fetch(FILES.bbmpBoundary);
+        if (!res.ok) throw new Error('Failed to load BBMP_Boundary.geojson');
+        const bbmp = await res.json(); // Polygon/MultiPolygon/LineString all OK for a line layer
+
+        if (!map.getSource('bbmp')) {
+          map.addSource('bbmp', { type: 'geojson', data: bbmp });
+        } else {
+          map.getSource('bbmp').setData(bbmp);
+        }
+        if (!map.getLayer('bbmp-line')) {
+          map.addLayer({
+            id: 'bbmp-line',
+            type: 'line',
+            source: 'bbmp',
+            paint: { 'line-color': '#e11d48', 'line-width': 3, 'line-opacity': 0.9 }
+          });
+        }
+      }
+      await addBBMPBoundary();
+
+      // Zones
+      await getGeo('zones');
+      map.addLayer({ id:'zones-fill', type:'fill', source:'zones', paint:{ 'fill-color':'#cffafe','fill-opacity':0.0 } });
+      map.addLayer({
+        id:'zones-line', type:'line', source:'zones',
+        paint:{
+          'line-color':'#0e7490',
+          'line-width':1.6,
+          'line-opacity':['step',['zoom'], 0, ZONE_AUTO_ZOOM, 0.6, 12, 1.0]
+        }
+      });
+      map.addLayer({ id:'zones-hover', type:'line', source:'zones', paint:{ 'line-color':'#0b7285','line-width':2.8,'line-opacity':0.9 }, filter:['==',['get','__uid__'],'__none__'] });
+      map.addLayer({ id:'zones-hit', type:'line', source:'zones',
+        paint:{ 'line-color':'rgba(0,0,0,0)', 'line-width':15, 'line-opacity':0.01 } });
+
+      // Zones interactions
+      let hoveredZoneUID = null;
+      map.on('mousemove', 'zones-hit', (e) => {
+        const f = e.features && e.features[0]; if (!f) return;
+        const uid = f.properties && f.properties.__uid__; if (!uid) return;
+        const sel = document.getElementById('zoneSel')?.value || '';
+        if (sel) return;
+        if (hoveredZoneUID !== uid) {
+          hoveredZoneUID = uid;
+          map.setFilter('zones-hover', ['==', ['get','__uid__'], hoveredZoneUID]);
+          map.getCanvas().style.cursor = 'pointer';
+        }
+      });
+      map.on('mouseleave', 'zones-hit', () => {
+        hoveredZoneUID = null;
+        const sel = document.getElementById('zoneSel')?.value || '';
+        if (!sel) map.setFilter('zones-hover', ['==', ['get','__uid__'], '__none__']);
+        map.getCanvas().style.cursor = '';
+      });
+      map.on('click', 'zones-hit', (e) => {
+        const f = e.features && e.features[0]; if (!f) return;
+        const uid = f.properties && f.properties.__uid__; if (!uid) return;
+        const zoneSel = document.getElementById('zoneSel');
+        if (zoneSel) {
+          const inList = [...zoneSel.options].some(o => o.value === uid);
+          if (inList) {
+            zoneSel.value = uid;
+            zoneSel.dispatchEvent(new Event('change', { bubbles: true }));
+          } else {
+            map.setFilter('zones-hover', ['==', ['get','__uid__'], uid]);
+          }
+        }
+      });
+    
+      // Wards (for spatial join)
+      await getGeo('wards');
+
+      // Hydrology layers (hidden initially)
+      await addHydrologyLayers();
+
+      // Hydrology toggle (correct wiring)
+      const hydroToggleEl = document.getElementById('hydroToggle');
+      if (hydroToggleEl) {
+        hydroToggleEl.addEventListener('change', () => {
+          setHydrologyVisible(hydroToggleEl.checked);
+          renderLegend(); // OK if this duplicates; it’s cheap
+        });
+      } 
+
+      // Zone lookups
+      (function buildZoneLookups(){
+        const zones = store.geo.zones.features || [];
+        store.bbmp.zoneNameByUID = {}; store.bbmp.zoneUIDByNormName = {};
+        zones.forEach(z=>{
+          const nm = getName('zones', z.properties);
+          store.bbmp.zoneNameByUID[z.properties.__uid__] = nm;
+          store.bbmp.zoneUIDByNormName[norm(nm)] = z.properties.__uid__;
+          if (!z.properties.ZoneName) z.properties.ZoneName = nm;
+        });
+      })();
+
+      // Wells layer (colored by donor)
+      map.addSource('wells',{type:'geojson',data:wellsFiltered});
+      map.addLayer({
+        id:'wells-circle', type:'circle', source:'wells',
+        paint:{
+          'circle-radius': ['interpolate',['linear'],['zoom'], 9,4, 12,7, 14,10],
+          'circle-stroke-color':'#fff',
+          'circle-stroke-width':1,
+          'circle-color':'#999'
+        }
+      });
+
+      // Per-well points (hidden until a location is clicked)
+      if (!map.getSource('wellPoints')) {
+        map.addSource('wellPoints', { type:'geojson', data: wellPointsAll });
+      } else {
+        map.getSource('wellPoints').setData(wellPointsAll);
+      }
+      if (!map.getLayer('wellPoints-circle')) {
+        map.addLayer({
+          id:'wellPoints-circle',
+          type:'circle',
+          source:'wellPoints',
+          layout:{ 'visibility':'none' },
+          paint:{
+            'circle-radius': 2.5,
+            'circle-color': '#555',
+            'circle-opacity': 0.9,
+            'circle-stroke-color':'#fff',
+            'circle-stroke-width':0.6
+          }
+        });
+      }
+
+      // Per-well popup
+      if (!window.__wellPointsClickBound) {
+        map.on('click','wellPoints-circle',(e)=>{
+          const p = e.features?.[0]?.properties || {};
+          const html = `
+            <div style="font-size:13px;line-height:1.35">
+              <strong>Well ID:</strong> ${p.well_id || '—'}<br/>
+              <strong>Location:</strong> ${p.location || '—'}<br/>
+              <strong>Donor:</strong> ${p.donor || '—'}<br/>
+              ${p._zoneName ? `<strong>Zone/Ward:</strong> ${p._zoneName} / ${p._wardName || '—'}<br/>` : ''}
+            </div>`;
+          new mapboxgl.Popup({maxWidth:'320px'}).setLngLat(e.lngLat).setHTML(html).addTo(map);
+        });
+        window.__wellPointsClickBound = true;
+      }
+
+      // Popup on location (wells-circle)
+      map.on('click','wells-circle', e => {
+        const f = e.features?.[0]; if (!f) return;
+        const p = f.properties || {};
+        const d = p.donor || '';
+        const stats   = d ? donorStats.get(d) : null;
+        const fyRange = stats ? compactFYRange(stats.years) : '';
+        const baseHTML = `
+          <div style="font-size:14px;line-height:1.4">
+            <strong>Location:</strong> ${p.location||'—'}<br/>
+            <strong>Donor:</strong> ${p.donor||'—'}<br/>
+            <strong>Wells:</strong> ${p.wells_count??'—'}<br/>
+            <strong>FY:</strong> ${p.fy||'—'}<br/>
+            <strong>Zone/Ward:</strong> ${p._zoneName||'—'} / ${p._wardName||'—'}
+            ${(d && stats) ? `
+              <div style="margin-top:8px;border-top:1px solid #eee;padding-top:6px;">
+                <span style="font-weight:700">${d}</span> supported
+                <span class="num" style="font-weight:700">${stats.totalWells}</span> percolation
+                ${plural(stats.totalWells,'well','wells')} across
+                <span class="num" style="font-weight:700">${stats.totalLocations}</span>
+                ${plural(stats.totalLocations,'location','locations')} from
+                <span class="num" style="font-weight:700">${fyRange}</span>.
+              </div>` : ''}
+          </div>`;
+
+        const hadWells = showLocationWells(p.location, f.geometry);
+        const html = hadWells ? baseHTML : (baseHTML +
+          `<div style="margin-top:8px;padding-top:6px;border-top:1px solid #eee;color:#6b7280">
+             Geotagging under progress
+           </div>`);
+        new mapboxgl.Popup({maxWidth:'340px'}).setLngLat(e.lngLat).setHTML(html).addTo(map);
+      });
+
+      // Start view
+      if (blrUrbanFC.features.length){
+        map.fitBounds(turf.bbox(blrUrbanFC), { padding: 50, duration: 600, maxZoom: 10.8 });
+      }
+
+      renderLegend();
+      setupFiltersUI();
+      
+      map.on('zoomend', updateZoneVisibility);
+      updateZoneVisibility();
+    }catch(e){ showError(e.message); }
+
+    // Re-attach listener if legend DOM was rebuilt
+    const ld2 = document.getElementById('legendDetails');
+    if (ld2) ld2.addEventListener('toggle', placeLegend);
+
+    const ld = document.getElementById('legendDetails');
+      if (ld) {
+        const saved = localStorage.getItem('legendOpen');
+        if (saved === '0') ld.open = false;
+        ld.addEventListener('toggle', () =>
+          localStorage.setItem('legendOpen', ld.open ? '1' : '0')
+        );
+      }
+
+  });
+}
+
+/* ---------- TOUR ANIMATION ---------- */
+
+let tourTimer=null;
+let tourPopup=null;
+let tourIndex=0;
+
+function startTour(){
+  stopTour();
+  if(!wellsFiltered.features.length) return;
+
+  tourIndex=0;
+
+  tourTimer=setInterval(()=>{
+    const f=wellsFiltered.features[tourIndex];
+    if(!f) return;
+
+    const p=f.properties;
+    const coords=f.geometry.coordinates;
+
+    // fly camera
+    map.flyTo({
+      center:coords,
+      zoom:15,
+      speed:0.6
+    });
+
+    // show wells for this location
+    showLocationWells(p.location,f.geometry);
+
+    // popup
+    if(tourPopup) tourPopup.remove();
+
+    tourPopup=new mapboxgl.Popup({closeButton:false})
+      .setLngLat(coords)
+      .setHTML(`
+        <div style="font-size:14px">
+          <strong>${p.location}</strong><br>
+          Donor: ${p.donor}<br>
+          Wells: ${p.wells_count}<br>
+          FY: ${p.fy}
+        </div>
+      `)
+      .addTo(map);
+
+    tourIndex=(tourIndex+1)%wellsFiltered.features.length;
+
+  },3000);
+}
+
+function stopTour(){
+  if(tourTimer) clearInterval(tourTimer);
+  tourTimer=null;
+  if(tourPopup) tourPopup.remove();
+}
+
+
+/* ---------- Boot ---------- */
+(async function start(){
+  try{
+    await getGeo('zones'); await getGeo('wards'); await getGeo('district');
+    const csvText = await fetchPercolationCSV();
+    const rows = Papa.parse(csvText,{header:true,dynamicTyping:true}).data;
+    await buildWells(rows);
+    await loadWellPointsCSV();
+    console.log('Wells loaded:', wellPointsAll.features.length);
+    initMap();
+  }catch(e){ showError(e.message||'Startup error'); }
+})();
+</script>
+</body>
+</html>
